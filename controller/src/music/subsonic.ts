@@ -626,6 +626,17 @@ export function getAnnotatedUri(song, opts: { maxDurationSec?: number | null } =
     `album="${escAnnotate(song.album)}"`,
     `subsonic_id="${escAnnotate(song.id)}"`,
   ];
+  // ICY StreamTitle/StreamUrl for the broadcast MP3 mount (radio.liq on_meta
+  // reads these). Clean "Artist - Title" so Music Assistant's art lookup
+  // matches; cover URL so clients that honour ICY StreamUrl show per-track art.
+  // The full original title still goes in the `title` field above (now-playing
+  // / web UI / Opus tags). SITE_URL is the public origin (same one /cover/:id
+  // is served from); omit the URL field when it isn't configured.
+  fields.push(`liq_stream_title="${escAnnotate(icyStreamTitle(song.artist, song.title))}"`);
+  const siteUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+  if (siteUrl && song.id) {
+    fields.push(`liq_stream_url="${escAnnotate(`${siteUrl}/cover/${song.id}`)}"`);
+  }
   if (song.year) fields.push(`year="${escAnnotate(song.year)}"`);
   if (song.genre) fields.push(`genre="${escAnnotate(song.genre)}"`);
   // DJ-mode adaptive blend: the queue stashes a per-transition crossfade length

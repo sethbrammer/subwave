@@ -16,7 +16,7 @@ function test(name: string, fn: () => void) {
   }
 }
 
-function main() {
+async function main() {
   console.log('cleanTitleForIcy:');
 
   // STRIP — trailing edition/source cruft
@@ -71,6 +71,25 @@ function main() {
   test('both empty → empty string', () =>
     assert.equal(icyStreamTitle('', ''), ''));
 
+  console.log('getAnnotatedUri ICY fields:');
+  const { getAnnotatedUri } = await import('../src/music/subsonic.js');
+
+  test('stamps clean liq_stream_title', () => {
+    process.env.SITE_URL = 'http://test.local:7700';
+    const uri = getAnnotatedUri({ id: 'abc', title: 'Redbone (Remastered)', artist: 'Childish Gambino', album: 'Awaken' });
+    assert.ok(uri.includes('liq_stream_title="Childish Gambino - Redbone"'), uri);
+  });
+  test('stamps liq_stream_url from SITE_URL + id', () => {
+    process.env.SITE_URL = 'http://test.local:7700';
+    const uri = getAnnotatedUri({ id: 'abc', title: 'Song', artist: 'Band', album: 'A' });
+    assert.ok(uri.includes('liq_stream_url="http://test.local:7700/cover/abc"'), uri);
+  });
+  test('omits liq_stream_url when SITE_URL unset', () => {
+    delete process.env.SITE_URL;
+    const uri = getAnnotatedUri({ id: 'abc', title: 'Song', artist: 'Band', album: 'A' });
+    assert.ok(!uri.includes('liq_stream_url='), uri);
+  });
+
   if (failures > 0) {
     console.error(`\n${failures} test(s) failed`);
     process.exit(1);
@@ -79,4 +98,4 @@ function main() {
   process.exit(0);
 }
 
-main();
+void main();
