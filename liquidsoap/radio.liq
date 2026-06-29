@@ -559,6 +559,8 @@ radio = compress(
 radio = metadata.map(update=false, strip=true, fun(_) -> [], radio)
 radio = insert_metadata(radio)
 
+stream_on = ref(false)
+
 def on_meta(m) =
   title = m["title"]
   artist = m["artist"]
@@ -580,13 +582,39 @@ def on_meta(m) =
       timestamp = ts
     })
     file.write(data=json, "/var/sub-wave/now-playing.json")
-    # Push the same metadata onto the Icecast stream so the ICY title
-    # tracks the current song instead of lagging a transition behind.
+    # In-band metadata — still drives the Opus mount's Ogg comments. The MP3
+    # mount has send_icy_metadata=false, so this no longer sets MP3 ICY.
     radio.insert_metadata([
       ("title", title),
       ("artist", artist),
       ("album", album)
     ])
+    # MP3 ICY — push a clean "Artist - Title" StreamTitle plus a per-track
+    # cover-art StreamUrl in ONE update. The controller stamps liq_stream_title
+    # (cruft-stripped) and liq_stream_url (SITE_URL/cover/<id>) on the annotate
+    # URI; fall back to a built "artist - title" when they're absent (e.g. a
+    # listener request not routed through getAnnotatedUri). In-band metadata
+    # can't carry StreamUrl (liquidsoap#2676), so this is sent out-of-band.
+    icy_title =
+      if m["liq_stream_title"] != "" then m["liq_stream_title"]
+      elsif artist != "" and title != "" then "#{artist} - #{title}"
+      elsif title != "" then title
+      else artist end
+    icy_url = m["liq_stream_url"]
+    if stream_on() then
+      try
+        icy.update_metadata(
+          mount="/stream.mp3",
+          host=environment.get(default="icecast", "ICECAST_HOST"),
+          port=7702,
+          user="source",
+          password=environment.get("ICECAST_SOURCE_PASSWORD"),
+          [("StreamTitle", icy_title), ("StreamUrl", icy_url)]
+        )
+      catch err do
+        log(label="on_meta", level=3, "icy.update_metadata failed: #{err}")
+      end
+    end
   end
 end
 
@@ -629,6 +657,7 @@ def make_stream_outputs() =
     %mp3(bitrate=192, samplerate=44100, stereo=true),
     id="stream_mp3",
     fallible=true,
+    send_icy_metadata=false,
     host=environment.get(default="icecast", "ICECAST_HOST"),
     port=7702,
     password=environment.get("ICECAST_SOURCE_PASSWORD"),
@@ -677,7 +706,6 @@ def make_stream_outputs() =
 end
 
 stream_shutdown = ref(fun () -> ())
-stream_on = ref(false)
 
 def stream_up() =
   if not stream_on() then
