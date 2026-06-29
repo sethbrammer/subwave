@@ -35,6 +35,11 @@ async function main() {
   test('strips bare year (2012)', () =>
     assert.equal(cleanTitleForIcy('Song (2012)'), 'Song'));
 
+  test('keeps (Editions of You) — substring "edition" must not over-strip', () =>
+    assert.equal(cleanTitleForIcy('Editions of You (Editions of You)'), 'Editions of You (Editions of You)'));
+  test('keeps (Monochrome) — substring "mono" must not over-strip', () =>
+    assert.equal(cleanTitleForIcy('Song (Monochrome)'), 'Song (Monochrome)'));
+
   // KEEP — performance-relevant qualifiers
   test('keeps (feat. X)', () =>
     assert.equal(cleanTitleForIcy('Song (feat. Drake)'), 'Song (feat. Drake)'));

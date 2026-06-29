@@ -565,7 +565,7 @@ export function cleanTitleForIcy(title: string): string {
     const hasKeep = ICY_KEEP_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(inner));
     if (hasKeep) break; // keep wins — stop stripping
     const isBareYear = /^\s*\d{4}\s*$/.test(inner);
-    const hasStrip = isBareYear || ICY_STRIP_KEYWORDS.some((k) => inner.includes(k));
+    const hasStrip = isBareYear || ICY_STRIP_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(inner));
     if (!hasStrip) break; // unknown qualifier — leave it
     out = out.slice(0, m.index).trimEnd();
   }
