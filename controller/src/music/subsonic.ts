@@ -531,6 +531,55 @@ export function getCoverArtUrl(id, size = 512) {
   return buildUrl('getCoverArt', { id, size });
 }
 
+// ICY StreamTitle hygiene. Music Assistant fetches per-track album art by
+// looking up the "Artist - Title" ICY text against metadata providers, and the
+// match degrades when version/edition cruft baked into a title tag (e.g.
+// "(Spring Sampler / 2012)") rides along. Strip only a curated safelist of
+// trailing edition/source groups; keep performance-relevant qualifiers
+// (feat./live/remix/acoustic/edit/version). Conservative on purpose — the full
+// original title is preserved everywhere except the broadcast StreamTitle.
+const ICY_STRIP_KEYWORDS = [
+  'remaster', 'remastered', 'deluxe', 'expanded', 'anniversary', 'edition',
+  'mono', 'stereo', 'reissue', 'sampler', 'itunes', 'spotify', 'amazon',
+  'apple music', 'bonus track',
+];
+const ICY_KEEP_KEYWORDS = [
+  'feat', 'ft', 'featuring', 'with', 'live', 'remix', 'acoustic',
+  'instrumental', 'edit', 'version', 'demo', 'mix', 'cover', 'reprise',
+  'interlude',
+];
+
+export function cleanTitleForIcy(title: string): string {
+  const original = String(title ?? '');
+  // Repeatedly remove a single trailing (...) or [...] group while it matches
+  // the strip rules and not the keep rules. Loop handles stacked groups like
+  // "Song (Live) (Remastered)" — strips the Remaster, then re-checks (Live),
+  // which is kept, and stops.
+  let out = original.trim();
+  // Trailing group: optional space, then (...) or [...] at end of string.
+  const trailing = /\s*[([]([^()[\]]*)[)\]]$/;
+  for (;;) {
+    const m = out.match(trailing);
+    if (!m) break;
+    const inner = m[1].toLowerCase();
+    const hasKeep = ICY_KEEP_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(inner));
+    if (hasKeep) break; // keep wins — stop stripping
+    const isBareYear = /^\s*\d{4}\s*$/.test(inner);
+    const hasStrip = isBareYear || ICY_STRIP_KEYWORDS.some((k) => inner.includes(k));
+    if (!hasStrip) break; // unknown qualifier — leave it
+    out = out.slice(0, m.index).trimEnd();
+  }
+  out = out.replace(/\s{2,}/g, ' ').trim();
+  return out === '' ? original : out;
+}
+
+export function icyStreamTitle(artist: string, title: string): string {
+  const a = String(artist ?? '').trim();
+  const t = cleanTitleForIcy(title).trim();
+  if (a && t) return `${a} - ${t}`;
+  return a || t || '';
+}
+
 // Returns a streamable URL for Liquidsoap to read. Wrapped in the `subhttp:`
 // protocol scheme so Liquidsoap's radio.liq routes the fetch through curl
 // instead of its built-in http.get.stream (which returns spurious 522s
