@@ -589,12 +589,18 @@ def on_meta(m) =
       ("artist", artist),
       ("album", album)
     ])
-    # MP3 ICY — push a clean "Artist - Title" StreamTitle plus a per-track
-    # cover-art StreamUrl in ONE update. The controller stamps liq_stream_title
-    # (cruft-stripped) and liq_stream_url (SITE_URL/cover/<id>) on the annotate
-    # URI; fall back to a built "artist - title" when they're absent (e.g. a
-    # listener request not routed through getAnnotatedUri). In-band metadata
-    # can't carry StreamUrl (liquidsoap#2676), so this is sent out-of-band.
+    # MP3 ICY — push a clean "Artist - Title" title plus a per-track cover-art
+    # URL in ONE update. The controller stamps liq_stream_title (cruft-stripped)
+    # and liq_stream_url (SITE_URL/cover/<id>) on the annotate URI; fall back to
+    # a built "artist - title" when they're absent (e.g. a listener request not
+    # routed through getAnnotatedUri). In-band metadata can't carry the URL
+    # (liquidsoap#2676), so this is sent out-of-band via icy.update_metadata.
+    #
+    # KEYS: for an Icecast mount over the http protocol, icy.update_metadata
+    # hits /admin/metadata?mode=updinfo, whose params are `song` and `url` — NOT
+    # the Shoutcast spellings StreamTitle/StreamUrl (those are silently ignored,
+    # leaving an empty StreamTitle). Icecast then emits them in the inline ICY
+    # block as StreamTitle='<song>';StreamUrl='<url>'; for listeners.
     icy_title =
       if m["liq_stream_title"] != "" then m["liq_stream_title"]
       elsif artist != "" and title != "" then "#{artist} - #{title}"
@@ -609,7 +615,7 @@ def on_meta(m) =
           port=7702,
           user="source",
           password=environment.get("ICECAST_SOURCE_PASSWORD"),
-          [("StreamTitle", icy_title), ("StreamUrl", icy_url)]
+          [("song", icy_title), ("url", icy_url)]
         )
       catch err do
         log(label="on_meta", level=3, "icy.update_metadata failed: #{err}")
